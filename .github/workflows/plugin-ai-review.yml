@@ -142,7 +142,56 @@ jobs:
           TOKENS_EST=$((SIZE / 4))
           echo "onchainos context: ${SIZE} bytes (~${TOKENS_EST} tokens)"
 
-      # ── Step 3: Build the API request ───────────────────────────
+      # ── Step 3: Select the best available Claude model ──────────
+      - name: Select best Claude model
+        id: model
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          echo "Querying available Claude models..."
+
+          MODELS_JSON=$(curl -s https://api.anthropic.com/v1/models?limit=100 \
+            -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+            -H "anthropic-version: 2023-06-01")
+
+          # Select the best model with this priority:
+          # 1. Prefer "opus" tier (most capable)
+          # 2. Then "sonnet" tier
+          # 3. Within same tier, prefer latest created_at
+          # 4. Filter only active models (type: "model")
+          #
+          # The jq logic:
+          # - Filter to claude models only
+          # - Assign a tier score: opus=3, sonnet=2, haiku=1
+          # - Sort by tier (desc), then created_at (desc)
+          # - Pick the first one
+          BEST_MODEL=$(echo "$MODELS_JSON" | jq -r '
+            [.data[]
+             | select(.id | startswith("claude-"))
+             | . + {
+                 tier_score: (
+                   if (.id | test("opus")) then 3
+                   elif (.id | test("sonnet")) then 2
+                   elif (.id | test("haiku")) then 1
+                   else 0
+                   end
+                 )
+               }
+            ]
+            | sort_by(-.tier_score, -.created_at)
+            | first
+            | .id // empty
+          ')
+
+          if [ -z "$BEST_MODEL" ]; then
+            echo "::warning::Could not determine best model, falling back to claude-sonnet-4-20250514"
+            BEST_MODEL="claude-sonnet-4-20250514"
+          fi
+
+          echo "Selected model: ${BEST_MODEL}"
+          echo "model=${BEST_MODEL}" >> "$GITHUB_OUTPUT"
+
+      # ── Step 4: Build the API request ───────────────────────────
       - name: Build API request
         id: build
         run: |
@@ -185,15 +234,19 @@ jobs:
           cp .github/prompts/ai-review-system.md /tmp/system_prompt.txt
 
           # Combine: system prompt + onchainos context + plugin content
+          MODEL="${{ steps.model.outputs.model }}"
+          echo "Using model: ${MODEL}"
+
           ONCHAINOS_AVAILABLE="${{ steps.onchainos.outputs.available }}"
           if [ "$ONCHAINOS_AVAILABLE" = "true" ] && [ -f /tmp/onchainos_context.txt ]; then
             jq -n \
+              --arg model "$MODEL" \
               --rawfile system /tmp/system_prompt.txt \
               --rawfile onchainos /tmp/onchainos_context.txt \
               --rawfile plugin /tmp/plugin_content.txt \
               '{
-                model: "claude-sonnet-4-20250514",
-                max_tokens: 8192,
+                model: $model,
+                max_tokens: 16384,
                 messages: [
                   {
                     role: "user",
@@ -203,11 +256,12 @@ jobs:
               }' > /tmp/api_request.json
           else
             jq -n \
+              --arg model "$MODEL" \
               --rawfile system /tmp/system_prompt.txt \
               --rawfile plugin /tmp/plugin_content.txt \
               '{
-                model: "claude-sonnet-4-20250514",
-                max_tokens: 8192,
+                model: $model,
+                max_tokens: 16384,
                 messages: [
                   {
                     role: "user",
@@ -289,9 +343,10 @@ jobs:
               recIcon = '👤'; recText = 'Manual review required';
             }
 
+            const modelUsed = '${{ steps.model.outputs.model }}' || 'unknown';
             const contextNote = hasOnchainos
-              ? '🔗 Reviewed against **latest onchainos source code** (live from main branch)'
-              : '⚠️ onchainos source was unavailable — review based on AI knowledge only';
+              ? `🔗 Reviewed against **latest onchainos source code** (live from main branch) | Model: \`${modelUsed}\``
+              : `⚠️ onchainos source was unavailable — review based on AI knowledge only | Model: \`${modelUsed}\``;
 
             // Split into collapsible sections
             const sections = review.split(/(?=^## \d+\.)/m).filter(s => s.trim());
