@@ -2,6 +2,12 @@
 
 Community-submitted plugins for the [Plugin Store](https://github.com/yz06276/plugin-store) ecosystem.
 
+## Documentation
+
+- **[Plugin Development Guide (English)](./docs/PLUGIN_DEVELOPMENT_GUIDE.md)** — Full guide to developing and submitting plugins
+- **[插件开发指南（中文）](./docs/PLUGIN_DEVELOPMENT_GUIDE_ZH.md)** — 完整的插件开发与提交指南
+- **[Contributing Guide](./CONTRIBUTING.md)** — Quick reference for contributors
+
 ## How to Submit a Plugin
 
 1. **Scaffold** your plugin locally:
