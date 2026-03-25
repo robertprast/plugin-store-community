@@ -40,25 +40,36 @@ Produce a comprehensive review report in EXACTLY this markdown format. Do not ad
 **Dependencies**:
 [External services, APIs, or tools required]
 
-## 3. Permission Audit
+## 3. Auto-Detected Permissions
 
-### Declared Permissions
-[Table of all declared permissions from plugin.yaml]
+NOTE: plugin.yaml does NOT contain a permissions field. You must INFER all permissions by analyzing the SKILL.md content and source code. This is one of the most important sections of your review.
 
-### Permission vs Actual Usage Cross-Check
+### onchainos Commands Used
 
-| Permission | Declared | Actually Used in SKILL.md | Status |
-|-----------|----------|--------------------------|--------|
-[For each permission, check if it matches actual usage]
+| Command Found | Exists in onchainos CLI | Risk Level | Context |
+|--------------|------------------------|------------|---------|
+[List every `onchainos <cmd>` reference found in SKILL.md. Verify each exists in the onchainos source code provided above.]
 
-### onchainos Commands
+### Wallet Operations
 
-| Command in SKILL.md | Declared in permissions | Exists in onchainos CLI | Risk Level |
-|---------------------|------------------------|------------------------|------------|
-[List every onchainos command found in SKILL.md]
+| Operation | Detected? | Where | Risk |
+|-----------|:---------:|-------|------|
+| Read balance | [Yes/No] | [which SKILL.md section] | Low |
+| Send transaction | [Yes/No] | | High |
+| Sign message | [Yes/No] | | High |
+| Contract call | [Yes/No] | | High |
 
-### Verdict: [✅ Consistent | ⚠️ Mismatch Found | ❌ Critical Mismatch]
-[Explain any mismatches]
+### External APIs / URLs
+
+| URL / Domain | Purpose | Risk |
+|-------------|---------|------|
+[List every external URL or API endpoint found in SKILL.md and source code]
+
+### Chains Operated On
+[List which blockchains this plugin interacts with, inferred from commands and context]
+
+### Overall Permission Summary
+[One paragraph summarizing: what this plugin can do, what data it accesses, what actions it takes. Flag anything dangerous.]
 
 ## 4. onchainos API Compliance
 
