@@ -178,7 +178,8 @@ jobs:
                  )
                }
             ]
-            | sort_by(-.tier_score, -.created_at)
+            | sort_by(.tier_score, .created_at)
+            | reverse
             | first
             | .id // empty
           ')
