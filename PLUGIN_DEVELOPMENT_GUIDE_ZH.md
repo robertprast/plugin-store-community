@@ -112,7 +112,7 @@ plugin 有一个必须的核心：**SKILL.md** — 一个 Markdown 文档，教 
 先克隆 community 仓库，再在里面运行 `init`：
 
 ```bash
-git clone git@github.com:yz06276/plugin-store-community.git
+git clone --depth=1 git@github.com:yz06276/plugin-store-community.git
 cd plugin-store-community
 plugin-store init my-awesome-plugin
 ```

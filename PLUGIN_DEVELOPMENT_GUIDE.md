@@ -106,7 +106,7 @@ Choose your path before starting:
 First, clone the community repository, then run `init` inside it:
 
 ```bash
-git clone git@github.com:yz06276/plugin-store-community.git
+git clone --depth=1 git@github.com:yz06276/plugin-store-community.git
 cd plugin-store-community
 plugin-store init my-awesome-plugin
 ```

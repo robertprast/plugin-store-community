@@ -7,7 +7,7 @@ Submit your plugin to the [Plugin Store](https://github.com/yz06276/plugin-store
 ### Step 1: Clone and create your plugin
 
 ```bash
-git clone git@github.com:yz06276/plugin-store-community.git
+git clone --depth=1 git@github.com:yz06276/plugin-store-community.git
 cd plugin-store-community
 plugin-store init my-plugin
 ```
