@@ -29,7 +29,27 @@
 
 A plugin has one required core: **SKILL.md** — a markdown document that teaches AI agents how to perform on-chain tasks. Optionally, it can also include a **Binary** (compiled from your source code by our CI).
 
-**SKILL.md is always the entry point.** Even if your plugin includes an binary, the Skill tells the AI agent what tools are available and when to use them.
+**SKILL.md is always the entry point.** Even if your plugin includes a binary, the Skill tells the AI agent what tools are available and when to use them.
+
+### On-chain operations: use onchainOS
+
+All plugins that interact with the blockchain **must** use the [onchainOS Agentic Wallet](https://github.com/okx/onchainos-skills) for on-chain operations — wallet signing, transaction broadcasting, swap execution, contract calls, and any action that writes to the blockchain.
+
+```
+✅ Allowed — query any data source you want:
+  Third-party DeFi APIs (DeFiLlama, Birdeye, DexScreener...)
+  Market data providers, analytics services
+  Your own backend APIs
+
+❌ Must use onchainOS — all on-chain write operations:
+  Wallet signing        → onchainos wallet send / sign
+  Transaction broadcast → onchainos gateway broadcast
+  Swap execution        → onchainos swap swap
+  Contract calls        → onchainos wallet contract-call
+  Token approvals       → onchainos swap approve
+```
+
+> Plugins that use third-party wallets (MetaMask, Phantom, etc.) or direct blockchain RPC calls (ethers.js, web3.js, etc.) for on-chain operations **will be rejected**. See the [onchainOS documentation](https://github.com/okx/onchainos-skills) for all available capabilities.
 
 ### Two types of plugins
 
@@ -37,12 +57,13 @@ A plugin has one required core: **SKILL.md** — a markdown document that teache
 Type A: Skill-Only (most common, any developer)
 ────────────────────────────────────────────────
   SKILL.md → instructs AI → calls onchainos CLI
+                           + queries external data (free)
 
 Type B: Skill + Binary (any developer, source code compiled by our CI)
 ────────────────────────────────────────────────
   SKILL.md → instructs AI → calls onchainos CLI
                            + calls your binary tools
-                           + runs your binary commands
+                           + queries external data (free)
 
   Your source code (in your GitHub repo)
     → our CI compiles it

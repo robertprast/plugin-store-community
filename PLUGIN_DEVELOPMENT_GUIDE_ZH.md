@@ -29,26 +29,47 @@
 
 ## 1. 什么是 plugin？
 
-plugin 有一个必须的核心：**SKILL.md** — 一个 Markdown 文档，教 AI Agent 如何执行链上任务。可选地，plugin 还可以包含 一个 **Binary**（由我们的 CI 从你的源码编译）。
+plugin 有一个必须的核心：**SKILL.md** — 一个 Markdown 文档，教 AI Agent 如何执行链上任务。可选地，plugin 还可以包含一个 **Binary**（由我们的 CI 从你的源码编译）。
 
 **SKILL.md 始终是入口。** 即使你的 plugin 包含 Binary，Skill 也负责告诉 AI Agent 有哪些工具可用、什么时候使用。
+
+### 链上操作：必须使用 onchainOS
+
+所有与区块链交互的 plugin **必须**使用 [onchainOS Agentic Wallet](https://github.com/okx/onchainos-skills) 进行链上操作 — 钱包签名、交易广播、Swap 执行、合约调用等任何写入区块链的操作。
+
+```
+✅ 允许 — 自由查询任何数据源：
+  第三方 DeFi API（DeFiLlama, Birdeye, DexScreener...）
+  行情数据提供商、分析服务
+  你自己的后端 API
+
+❌ 必须使用 onchainOS — 所有链上写操作：
+  钱包签名          → onchainos wallet send / sign
+  交易广播          → onchainos gateway broadcast
+  Swap 执行         → onchainos swap swap
+  合约调用          → onchainos wallet contract-call
+  Token 授权        → onchainos swap approve
+```
+
+> 使用第三方钱包（MetaMask、Phantom 等）或直接区块链 RPC 调用（ethers.js、web3.js 等）进行链上操作的 plugin **将被拒绝**。查看 [onchainOS 文档](https://github.com/okx/onchainos-skills) 了解所有可用能力。
 
 ### 两种类型的 plugin
 
 ```
 类型 A：纯 Skill（最常见，任何开发者都可以）
 ────────────────────────────────────────────
- SKILL.md → 指挥 AI → 调用 onchainos CLI
+  SKILL.md → 指挥 AI → 调用 onchainos CLI
+                      + 查询外部数据（自由）
 
 类型 B：Skill + Binary（任何开发者，源码由我们的 CI 编译）
 ────────────────────────────────────────────
- SKILL.md → 指挥 AI → 调用 onchainos CLI
- + 调用你的 binary 工具
- + 运行你的二进制命令
+  SKILL.md → 指挥 AI → 调用 onchainos CLI
+                      + 调用你的 binary 工具
+                      + 查询外部数据（自由）
 
- 你的源码（在你自己的 GitHub 仓库中）
- → 我们的 CI 编译
- → 用户安装的是我们编译的产物
+  你的源码（在你自己的 GitHub 仓库中）
+    → 我们的 CI 编译
+    → 用户安装的是我们编译的产物
 ```
 
 在开始之前选择你的路径：
