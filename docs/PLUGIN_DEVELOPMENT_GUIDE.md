@@ -18,7 +18,7 @@
 10. [Updating Your Plugin](#10-updating-your-plugin)
 11. [Rules & Restrictions](#11-rules--restrictions)
 12. [SKILL.md Writing Guide](#12-skillmd-writing-guide)
-13. [Submitting Plugins with Source Code (MCP/Binary)](#13-submitting-plugins-with-source-code-mcpbinary)
+13. [Submitting Plugins with Source Code (Binary)](#13-submitting-plugins-with-source-code-binary)
 14. [onchainos Command Reference](#14-onchainos-command-reference)
 15. [FAQ](#15-faq)
 
@@ -26,9 +26,9 @@
 
 ## 1. What is a Plugin?
 
-A plugin has one required core: **SKILL.md** — a markdown document that teaches AI agents how to perform on-chain tasks. Optionally, it can also include an **MCP Server** or **Binary** (compiled from your source code by our CI).
+A plugin has one required core: **SKILL.md** — a markdown document that teaches AI agents how to perform on-chain tasks. Optionally, it can also include a **Binary** (compiled from your source code by our CI).
 
-**SKILL.md is always the entry point.** Even if your plugin includes an MCP server, the Skill tells the AI agent what tools are available and when to use them.
+**SKILL.md is always the entry point.** Even if your plugin includes an binary, the Skill tells the AI agent what tools are available and when to use them.
 
 ### Two types of plugins
 
@@ -40,7 +40,7 @@ Type A: Skill-Only (most common, any developer)
 Type B: Skill + Binary (any developer, source code compiled by our CI)
 ────────────────────────────────────────────────
   SKILL.md → instructs AI → calls onchainos CLI
-                           + calls your MCP tools
+                           + calls your binary tools
                            + runs your binary commands
 
   Your source code (in your GitHub repo)
@@ -100,7 +100,7 @@ my-awesome-plugin/
 └── README.md                          # Plugin description
 ```
 
-**If you're building a Skill + MCP/Binary plugin**, you also need:
+**If you're building a Skill + Binary plugin**, you also need:
 - Source code in your own GitHub repo (we compile it, you don't submit binaries)
 - A `build` section in plugin.yaml pointing to your repo + commit SHA
 
@@ -138,14 +138,11 @@ chains:
 
 api_calls: []
 
-extra:
-  protocols: []                      # e.g. [uniswap-v3, raydium]
-  risk_level: low                    # low | medium | high
 ```
 
 ### 4B. Skill + Binary Example (with source code compilation)
 
-If your plugin includes an MCP server or binary, you need a `build` section. Your source code stays in your own GitHub repo — we compile it.
+If your plugin includes a binary, you need a `build` section. Your source code stays in your own GitHub repo — we compile it.
 
 ```yaml
 schema_version: 2
@@ -162,18 +159,18 @@ tags: [defi, yield]
 components:
   skill:
     dir: skills/defi-yield-optimizer   # SKILL.md — always required, the entry point
-  mcp:
+  binary:
     type: binary
-    command: defi-yield-mcp            # Name of compiled binary
+    command: defi-yield            # Name of compiled binary
     args: ["--stdio"]
     env: [DEFI_API_KEY]
 
 build:
   lang: rust                            # rust | go | typescript | node | python
-  source_repo: "defi-builder/yield-mcp" # Your GitHub repo with source code
+  source_repo: "defi-builder/yield-optimizer" # Your GitHub repo with source code
   source_commit: "a1b2c3d4e5f6..."      # Full 40-char commit SHA (pinned)
   source_dir: "."                       # Path within repo (default: root)
-  binary_name: defi-yield-mcp           # Compiled output name
+  binary_name: defi-yield           # Compiled output name
 
 chains:
   - ethereum
@@ -182,14 +179,11 @@ chains:
 api_calls:
   - "api.defillama.com"
 
-extra:
-  protocols: [morpho, aave]
-  risk_level: medium
 ```
 
 **Key differences from Skill-Only:**
 - `schema_version: 2` (not 1)
-- `components.mcp` or `components.binary` declared
+- `components.binary` declared
 - `build` section with `source_repo` + `source_commit`
 - Our CI clones your repo at the exact commit, compiles, and publishes
 
@@ -215,7 +209,6 @@ git rev-parse HEAD
 | `components.skill.dir` | Yes | Relative path to the directory containing SKILL.md |
 | `chains` | No | List of blockchains the plugin operates on (informational) |
 | `api_calls` | No | List of external API domains the plugin calls (reviewer reference; lint checks against this) |
-| `extra.risk_level` | No | `low`, `medium`, or `high` |
 
 ### Naming Rules
 
@@ -227,15 +220,15 @@ git rev-parse HEAD
 
 ## 5. Step 3: Write SKILL.md
 
-SKILL.md is the **single entry point** of your plugin. It teaches the AI agent what your plugin does and how to use it. For Skill-only plugins, it orchestrates onchainos commands. For MCP/Binary plugins, it also orchestrates your custom tools.
+SKILL.md is the **single entry point** of your plugin. It teaches the AI agent what your plugin does and how to use it. For Skill-only plugins, it orchestrates onchainos commands. For Binary plugins, it also orchestrates your custom tools.
 
 ```
 Skill-Only plugin:
   SKILL.md → onchainos commands
 
-MCP/Binary plugin:
+Binary plugin:
   SKILL.md → onchainos commands
-           + your MCP tools (calculate_yield, find_route, ...)
+           + your binary tools (calculate_yield, find_route, ...)
            + your binary commands (my-tool start, my-tool status, ...)
 ```
 
@@ -291,9 +284,9 @@ onchainos <command> <subcommand> --flag value
 - For security scanning → use `okx-security` skill
 ```
 
-### 5B. Template (MCP/Binary Plugin)
+### 5B. Template (Binary Plugin)
 
-If your plugin includes an MCP server, the SKILL.md must tell the AI agent about **both** onchainos commands and your custom MCP tools:
+If your plugin includes a binary, the SKILL.md must tell the AI agent about **both** onchainos commands and your custom binary tools:
 
 ```markdown
 ---
@@ -310,16 +303,16 @@ tags:
 
 ## Overview
 
-This plugin combines custom yield analytics (via MCP tools) with
+This plugin combines custom yield analytics (via binary tools) with
 onchainos execution capabilities to find and enter the best DeFi positions.
 
 ## Pre-flight Checks
 
 1. The `onchainos` CLI is installed and configured
-2. The defi-yield-mcp MCP server is installed via plugin-store
+2. The defi-yield binary is installed via plugin-store
 3. A valid DEFI_API_KEY environment variable is set
 
-## MCP Tools (provided by this plugin)
+## Binary Tools (provided by this plugin)
 
 ### calculate_yield
 Calculate the projected APY for a specific DeFi pool.
@@ -331,17 +324,17 @@ Find the optimal swap route to enter a DeFi position.
 **Parameters**: from_token (string), to_token (string), amount (number)
 **Returns**: Route steps, estimated output, price impact
 
-## Commands (using onchainos + MCP tools together)
+## Commands (using onchainos + binary tools together)
 
 ### Find Best Yield
 
-1. Call MCP tool `calculate_yield` for the target pool
+1. Call binary tool `calculate_yield` for the target pool
 2. Run `onchainos token info --address <pool_token> --chain <chain>`
 3. Present yield rate + token info to user
 
 ### Enter Position
 
-1. Call MCP tool `find_best_route` for the swap
+1. Call binary tool `find_best_route` for the swap
 2. Run `onchainos swap quote --from <token> --to <pool_token> --amount <amount>`
 3. **Ask user to confirm** the swap amount and expected yield
 4. Run `onchainos swap swap ...` to execute
@@ -351,7 +344,7 @@ Find the optimal swap route to enter a DeFi position.
 
 | Error | Cause | Resolution |
 |-------|-------|------------|
-| MCP connection failed | Server not running | Run `plugin-store install defi-yield-optimizer` |
+| Binary connection failed | Server not running | Run `plugin-store install defi-yield-optimizer` |
 | "Pool not found" | Invalid pool address | Verify the pool contract address |
 | "Insufficient balance" | Not enough tokens | Check balance with `onchainos portfolio all-balances` |
 
@@ -430,7 +423,6 @@ Fix all errors (❌) before submitting. Warnings (⚠️) are advisory.
 | E041 | Missing LICENSE | Add a LICENSE file to your submission directory |
 | E052 | Missing SKILL.md | Ensure SKILL.md exists in the path specified by `components.skill.dir` |
 | E065 | Missing chains/api_calls | Add `chains` and/or `api_calls` fields to plugin.yaml |
-| E110 | MCP not allowed | Community plugins cannot include MCP components |
 | E111 | Binary not allowed | Community plugins cannot include Binary components |
 
 ---
@@ -556,7 +548,6 @@ If your update changes `chains` or `api_calls`, the review will be more thorough
 
 ### What Community Plugins CANNOT Do
 
-- Include MCP server components (code execution)
 - Include binary components (code execution)
 - Use reserved name prefixes (`okx-`, `official-`, `plugin-store-`)
 - Bypass onchainos CLI (use direct RPC, external price APIs, web3 libraries)
@@ -605,9 +596,9 @@ onchainos market price --address <TOKEN_ADDRESS> --chain solana
 
 ---
 
-## 13. Submitting Plugins with Source Code (MCP/Binary)
+## 13. Submitting Plugins with Source Code (Binary)
 
-> **Important:** SKILL.md is always the entry point. Even if your plugin includes an MCP server or binary, the SKILL.md is what tells the AI agent how to orchestrate everything — onchainos commands, your MCP tools, and your binary commands.
+> **Important:** SKILL.md is always the entry point. Even if your plugin includes a binary, the SKILL.md is what tells the AI agent how to orchestrate everything — onchainos commands, your binary tools, and your binary commands.
 
 ### Who Can Submit Source Code?
 
@@ -626,9 +617,9 @@ Your source code stays in your own GitHub repo. You provide the repo URL and a p
 
 ```yaml
 schema_version: 2
-name: my-mcp-server
+name: my-binary-tool
 version: "1.0.0"
-description: "My custom MCP server"
+description: "My custom binary tool"
 author:
   name: "Your Name"
   github: "your-username"
@@ -638,21 +629,20 @@ tags: [defi]
 
 components:
   skill:
-    dir: skills/my-mcp-server       # SKILL.md is ALWAYS required
-  mcp:
+    dir: skills/my-binary-tool       # SKILL.md is ALWAYS required
+  binary:
     type: binary
-    command: my-mcp-server
+    command: my-binary-tool
     args: ["--stdio"]
     env: [API_KEY]
 
 build:
   lang: rust                          # rust | go | typescript | node | python
-  source_repo: "your-username/my-mcp-server"  # Your GitHub repo with source code
+  source_repo: "your-username/my-binary-tool"  # Your GitHub repo with source code
   source_commit: "abc123def456..."    # Full 40-char commit SHA (pinned)
   source_dir: "."                     # Path within repo (default: root)
-  binary_name: my-mcp-server         # Name of the compiled output
+  binary_name: my-binary-tool         # Name of the compiled output
   # main: src/index.ts               # Required for typescript/python
-  # npm_scope: "@plugin-store"       # Required for node
 
 chains:
   - ethereum
@@ -674,16 +664,16 @@ git rev-parse HEAD
 Source code lives in your own repo. You only submit metadata + SKILL to the community repo:
 
 ```
-submissions/my-mcp-server/            ← In community repo (small, ~20KB)
+submissions/my-binary-tool/            ← In community repo (small, ~20KB)
   plugin.yaml                         # With build section pointing to your repo
-  skills/my-mcp-server/
+  skills/my-binary-tool/
     SKILL.md                          # The AI agent's entry point
     references/
   LICENSE
   CHANGELOG.md
   README.md
 
-your-username/my-mcp-server           ← Your own GitHub repo (source code)
+your-username/my-binary-tool           ← Your own GitHub repo (source code)
   Cargo.toml                          # (Rust example)
   src/
     main.rs
@@ -697,31 +687,30 @@ your-username/my-mcp-server           ← Your own GitHub repo (source code)
 | Rust | `Cargo.toml` | `cargo build --release` | Native binary |
 | Go | `go.mod` | `go build` | Native binary |
 | TypeScript | `package.json` + `build.main` | `bun build --compile` | Bundled binary |
-| Node.js | `package.json` | `npm publish` | npm package |
 | Python | `pyproject.toml` + `build.main` | `PyInstaller` | Bundled binary |
 
 ### SKILL.md as the Orchestrator
 
-Your SKILL.md tells the AI agent how to use **both** onchainos commands and your custom MCP tools:
+Your SKILL.md tells the AI agent how to use **both** onchainos commands and your custom binary tools:
 
 ```markdown
 ## Commands
 
-### Check Yield (uses your MCP tool)
-Call MCP tool `calculate_yield` with pool address and chain.
+### Check Yield (uses your binary tool)
+Call binary tool `calculate_yield` with pool address and chain.
 
-### Execute Deposit (uses onchainos + your MCP)
-1. Call MCP tool `find_best_route` for the chosen pool
+### Execute Deposit (uses onchainos + your binary)
+1. Call binary tool `find_best_route` for the chosen pool
 2. Run `onchainos swap quote --from USDC --to POOL_TOKEN`
 3. **Ask user to confirm** amount and expected yield
 4. Run `onchainos swap swap ...` to execute
-5. Call MCP tool `monitor_position` to start tracking
+5. Call binary tool `monitor_position` to start tracking
 ```
 
 ### What You Cannot Do
 
 - Submit pre-compiled binaries (.exe, .dll, .so, .wasm) — E130
-- Declare MCP/Binary without a build section — E110/E111
+- Declare Binary without a build section — E110/E111
 - Have source code larger than 10MB — E126
 - Include build scripts that download from the internet during compilation
 
@@ -754,7 +743,7 @@ For the full subcommand list, run `onchainos <command> --help` or see the [oncha
 **Q: Can I submit a plugin that calls external APIs directly?**
 A: No. All on-chain operations must go through onchainos CLI. If you need a capability that onchainos doesn't provide, open a feature request in the onchainos repo.
 
-**Q: Can I include a binary or MCP server?**
+**Q: Can I include a binary?**
 A: Yes. Any developer can submit binary source code. Keep your source in your own GitHub repo and add a `build` section to plugin.yaml with `source_repo` and `source_commit`. Our CI compiles it. See Section 13 for details.
 
 **Q: How long does the review take?**
@@ -766,8 +755,6 @@ A: The AI review is advisory only — it does not block your PR. However, human 
 **Q: Can I update my plugin after it's published?**
 A: Yes. Submit a new PR with updated files and a bumped version number.
 
-**Q: How do I become a Verified Publisher?**
-A: After 5+ approved plugin submissions, you can apply for Verified Publisher status. This unlocks elevated permissions and faster review.
 
 **Q: My `plugin-store lint` passes but the GitHub check fails. Why?**
 A: Make sure you're running the latest version of the plugin-store CLI. Also ensure your PR only modifies files within `submissions/your-plugin-name/`.
@@ -779,13 +766,13 @@ A: `build.source_repo` must be in `owner/repo` format (e.g. `your-username/my-se
 A: `build.source_commit` must be the full commit hash, not a short SHA or branch name. Run `git rev-parse HEAD` in your source repo to get the full 40-character hash.
 
 **Q: What does error E120 "must also include a Skill component" mean?**
-A: Every plugin with a `build` section must also have a SKILL.md. The Skill is the entry point — it tells the AI agent how to use your MCP server or binary.
+A: Every plugin with a `build` section must also have a SKILL.md. The Skill is the entry point — it tells the AI agent how to use your binary.
 
 **Q: What does error E130 "pre-compiled binary file is not allowed" mean?**
 A: You submitted a compiled file (.exe, .dll, .so, .wasm, etc.) in your submission directory. Remove it — we compile from your source code, you don't submit binaries.
 
 **Q: What does error E110/E111 "requires a build section" mean?**
-A: You declared an MCP or Binary component but didn't include a `build` section. We need to know where your source code is so we can compile it. Add `build.lang`, `build.source_repo`, and `build.source_commit`.
+A: You declared a Binary component but didn't include a `build` section. We need to know where your source code is so we can compile it. Add `build.lang`, `build.source_repo`, and `build.source_commit`.
 
 **Q: The build failed in CI but I can compile locally. Why?**
 A: Our CI compiles on Ubuntu Linux. Ensure your code builds on Linux, not just macOS/Windows. Check the build logs in the GitHub Actions run for specific errors.

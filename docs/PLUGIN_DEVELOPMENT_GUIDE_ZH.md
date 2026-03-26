@@ -18,7 +18,7 @@
 10. [更新你的 plugin](#10-更新你的 plugin)
 11. [规则与限制](#11-规则与限制)
 12. [SKILL.md 写作指南](#12-skillmd-写作指南)
-13. [提交含源码的 plugin（MCP/Binary）](#13-提交含源码的 pluginmcpbinary)
+13. [提交含源码的 plugin（Binary）](#13-提交含源码的 pluginbinary)
 14. [onchainos 命令参考](#14-onchainos-命令参考)
 15. [常见问题](#15-常见问题)
 
@@ -26,9 +26,9 @@
 
 ## 1. 什么是 plugin？
 
-plugin 有一个必须的核心：**SKILL.md** — 一个 Markdown 文档，教 AI Agent 如何执行链上任务。可选地，plugin 还可以包含 **MCP Server** 或 **Binary**（由我们的 CI 从你的源码编译）。
+plugin 有一个必须的核心：**SKILL.md** — 一个 Markdown 文档，教 AI Agent 如何执行链上任务。可选地，plugin 还可以包含 一个 **Binary**（由我们的 CI 从你的源码编译）。
 
-**SKILL.md 始终是入口。** 即使你的 plugin 包含 MCP Server，Skill 也负责告诉 AI Agent 有哪些工具可用、什么时候使用。
+**SKILL.md 始终是入口。** 即使你的 plugin 包含 Binary，Skill 也负责告诉 AI Agent 有哪些工具可用、什么时候使用。
 
 ### 两种类型的 plugin
 
@@ -40,7 +40,7 @@ plugin 有一个必须的核心：**SKILL.md** — 一个 Markdown 文档，教 
 类型 B：Skill + Binary（任何开发者，源码由我们的 CI 编译）
 ────────────────────────────────────────────
  SKILL.md → 指挥 AI → 调用 onchainos CLI
- + 调用你的 MCP 工具
+ + 调用你的 binary 工具
  + 运行你的二进制命令
 
  你的源码（在你自己的 GitHub 仓库中）
@@ -100,7 +100,7 @@ my-awesome-plugin/
 └── README.md # plugin 说明
 ```
 
-**如果你要构建 Skill + MCP/Binary plugin**，你还需要：
+**如果你要构建 Skill + Binary plugin**，你还需要：
 - 源码在你自己的 GitHub 仓库中（我们来编译，你不需要提交二进制）
 - 在 plugin.yaml 中添加 `build` 配置，指向你的仓库 + commit SHA
 
@@ -138,14 +138,12 @@ chains:
 
 api_calls: []
 
-extra:
  protocols: [] # 例如 [uniswap-v3, raydium]
- risk_level: low # low | medium | high
 ```
 
 ### 4B. Skill + Binary 示例（含源码编译）
 
-如果你的 plugin 包含 MCP Server 或二进制，需要添加 `build` 配置。源码在你自己的 GitHub 仓库中 — 我们来编译。
+如果你的 plugin 包含 binary 或二进制，需要添加 `build` 配置。源码在你自己的 GitHub 仓库中 — 我们来编译。
 
 ```yaml
 schema_version: 2
@@ -164,16 +162,16 @@ components:
  dir: skills/defi-yield-optimizer # SKILL.md — 始终必须，是入口
  mcp:
  type: binary
- command: defi-yield-mcp # 编译后的二进制名
+ command: defi-yield # 编译后的二进制名
  args: ["--stdio"]
  env: [DEFI_API_KEY]
 
 build:
  lang: rust # rust | go | typescript | node | python
- source_repo: "defi-builder/yield-mcp" # 你的 GitHub 源码仓库
+ source_repo: "defi-builder/yield-optimizer" # 你的 GitHub 源码仓库
  source_commit: "a1b2c3d4e5f6..." # 完整的 40 位 commit SHA（锁定版本）
  source_dir: "." # 仓库内路径（默认：根目录）
- binary_name: defi-yield-mcp # 编译产物名
+ binary_name: defi-yield # 编译产物名
 
 chains:
  - ethereum
@@ -182,14 +180,12 @@ chains:
 api_calls:
  - "api.defillama.com"
 
-extra:
  protocols: [morpho, aave]
- risk_level: medium
 ```
 
 **与纯 Skill 的关键区别：**
 - `schema_version: 2`（不是 1）
-- 声明了 `components.mcp` 或 `components.binary`
+- 声明了 ``components.binary``
 - 包含 `build` 配置，含 `source_repo` + `source_commit`
 - 我们的 CI 从你的仓库克隆、编译、发布
 
@@ -215,7 +211,6 @@ git rev-parse HEAD
 | `components.skill.dir` | 是 | SKILL.md 所在目录的相对路径 |
 | `chains` | 否 | plugin 运行的区块链列表（信息性字段） |
 | `api_calls` | 否 | plugin 调用的外部 API 域名列表（供审查参考；lint 会据此检查） |
-| `extra.risk_level` | 否 | `low`、`medium` 或 `high` |
 
 ### 命名规则
 
@@ -227,15 +222,15 @@ git rev-parse HEAD
 
 ## 5. 第三步：编写 SKILL.md
 
-SKILL.md 是 plugin 的**唯一入口**。它教 AI Agent 你的 plugin 做什么以及如何使用。纯 Skill plugin 编排 onchainos 命令；MCP/Binary plugin 还额外编排你的自定义工具。
+SKILL.md 是 plugin 的**唯一入口**。它教 AI Agent 你的 plugin 做什么以及如何使用。纯 Skill plugin 编排 onchainos 命令；Binary plugin 还额外编排你的自定义工具。
 
 ```
 纯 Skill plugin：
  SKILL.md → onchainos 命令
 
-MCP/Binary plugin：
+Binary plugin：
  SKILL.md → onchainos 命令
- + 你的 MCP 工具（calculate_yield, find_route, ...）
+ + 你的 binary 工具（calculate_yield, find_route, ...）
  + 你的二进制命令（my-tool start, my-tool status, ...）
 ```
 
@@ -291,9 +286,9 @@ onchainos <命令> <子命令> --参数 值
 - 需要安全扫描 → 使用 `okx-security` 技能
 ```
 
-### 5B. 模板（MCP/Binary plugin）
+### 5B. 模板（Binary plugin）
 
-如果你的 plugin 包含 MCP Server，SKILL.md 必须同时描述 onchainos 命令和你的 MCP 工具：
+如果你的 plugin 包含 binary，SKILL.md 必须同时描述 onchainos 命令和你的 binary 工具：
 
 ```markdown
 ---
@@ -310,16 +305,16 @@ tags:
 
 ## Overview
 
-本 plugin 结合自定义收益分析（MCP 工具）和 onchainos 执行能力，
+本 plugin 结合自定义收益分析（binary 工具）和 onchainos 执行能力，
 帮用户找到并进入最佳的 DeFi 仓位。
 
 ## Pre-flight Checks
 
 1. 已安装并配置 `onchainos` CLI
-2. 已通过 plugin-store 安装 defi-yield-mcp MCP Server
+2. 已通过 plugin-store 安装 defi-yield binary
 3. 已设置 DEFI_API_KEY 环境变量
 
-## MCP 工具（本 plugin 提供）
+## Binary 工具（本 plugin 提供）
 
 ### calculate_yield
 计算指定 DeFi 池子的预期 APY。
@@ -331,17 +326,17 @@ tags:
 **参数**: from_token (string), to_token (string), amount (number)
 **返回**: 路径步骤、预估产出、价格影响
 
-## 命令（onchainos + MCP 工具配合使用）
+## 命令（onchainos + binary 工具配合使用）
 
 ### 查询最佳收益
 
-1. 调用 MCP 工具 `calculate_yield` 获取目标池子的收益率
+1. 调用 binary 工具 `calculate_yield` 获取目标池子的收益率
 2. 执行 `onchainos token info --address <pool_token> --chain <chain>`
 3. 向用户展示收益率 + 代币信息
 
 ### 执行存入
 
-1. 调用 MCP 工具 `find_best_route` 获取最优路径
+1. 调用 binary 工具 `find_best_route` 获取最优路径
 2. 执行 `onchainos swap quote --from <token> --to <pool_token> --amount <amount>`
 3. **请用户确认** 金额和预期收益
 4. 执行 `onchainos swap swap ...`
@@ -351,7 +346,7 @@ tags:
 
 | 错误 | 原因 | 解决方案 |
 |------|------|---------|
-| MCP 连接失败 | Server 未运行 | 执行 `plugin-store install defi-yield-optimizer` |
+| Binary 连接失败 | Server 未运行 | 执行 `plugin-store install defi-yield-optimizer` |
 | "Pool not found" | 无效的池子地址 | 确认合约地址 |
 | "余额不足" | 代币不够 | 用 `onchainos portfolio all-balances` 查看余额 |
 
@@ -430,7 +425,6 @@ Linting ./my-awesome-plugin/...
 | E041 | 缺少 LICENSE | 在提交目录中添加 LICENSE 文件 |
 | E052 | 缺少 SKILL.md | 确保 SKILL.md 存在于 `components.skill.dir` 指定的路径中 |
 | E065 | 缺少 chains/api_calls | 在 plugin.yaml 中添加 `chains` 和/或 `api_calls` 字段 |
-| E110 | 不允许 MCP 组件 | 社区 plugin 不能包含 MCP 组件 |
 | E111 | 不允许 Binary 组件 | 社区 plugin 不能包含 Binary 组件 |
 
 ---
@@ -556,7 +550,7 @@ Phase 3：AI 代码审查（Claude）
 
 ### 社区 plugin 不能做的
 
-- 包含 MCP Server 组件（代码执行）
+- 包含 binary 组件（代码执行）
 - 包含 Binary 组件（代码执行）
 - 使用保留名称前缀（`okx-`、`official-`、`plugin-store-`）
 - 绕过 onchainos CLI（使用直接 RPC、外部价格 API、web3 库）
@@ -605,9 +599,9 @@ onchainos market price --address <TOKEN_ADDRESS> --chain solana
 
 ---
 
-## 13. 提交含源码的 plugin（MCP/Binary）
+## 13. 提交含源码的 plugin（Binary）
 
-> **核心概念：SKILL.md 是一切的入口。** 即使你的 plugin 包含 MCP Server 或二进制文件，SKILL.md 仍然是 AI Agent 的操作指南 — 它告诉 AI 如何编排 onchainos 命令和你的自定义工具。
+> **核心概念：SKILL.md 是一切的入口。** 即使你的 plugin 包含 binary 或二进制文件，SKILL.md 仍然是 AI Agent 的操作指南 — 它告诉 AI 如何编排 onchainos 命令和你的自定义工具。
 
 ### 谁可以提交源码？
 
@@ -626,9 +620,9 @@ onchainos market price --address <TOKEN_ADDRESS> --chain solana
 
 ```yaml
 schema_version: 2
-name: my-mcp-server
+name: my-binary-tool
 version: "1.0.0"
-description: "我的 MCP 服务器"
+description: "我的 binary 工具"
 author:
  name: "你的名字"
  github: "your-username"
@@ -638,21 +632,20 @@ tags: [defi]
 
 components:
  skill:
- dir: skills/my-mcp-server # SKILL.md 始终必须
+ dir: skills/my-binary-tool # SKILL.md 始终必须
  mcp:
  type: binary
- command: my-mcp-server
+ command: my-binary-tool
  args: ["--stdio"]
  env: [API_KEY]
 
 build:
  lang: rust # rust | go | typescript | node | python
- source_repo: "your-username/my-mcp-server" # 你的 GitHub 源码仓库
+ source_repo: "your-username/my-binary-tool" # 你的 GitHub 源码仓库
  source_commit: "abc123def456..." # 完整的 40 位 commit SHA（锁定版本）
  source_dir: "." # 仓库内的路径（默认：根目录）
- binary_name: my-mcp-server # 编译产物名
+ binary_name: my-binary-tool # 编译产物名
  # main: src/index.ts # TypeScript/Python 需要指定
- # npm_scope: "@plugin-store" # Node.js 需要指定
 
 chains:
  - ethereum
@@ -674,16 +667,16 @@ git rev-parse HEAD
 源码在你自己的仓库中。你只需要把元数据 + SKILL 提交到 community 仓库：
 
 ```
-submissions/my-mcp-server/ ← 在 community 仓库中（很小，约 20KB）
+submissions/my-binary-tool/ ← 在 community 仓库中（很小，约 20KB）
  plugin.yaml # 包含 build 配置，指向你的仓库
- skills/my-mcp-server/
+ skills/my-binary-tool/
  SKILL.md # AI Agent 的入口
  references/
  LICENSE
  CHANGELOG.md
  README.md
 
-your-username/my-mcp-server ← 你自己的 GitHub 仓库（源码）
+your-username/my-binary-tool ← 你自己的 GitHub 仓库（源码）
  Cargo.toml # （Rust 示例）
  src/
  main.rs
@@ -702,26 +695,26 @@ your-username/my-mcp-server ← 你自己的 GitHub 仓库（源码）
 
 ### SKILL.md 作为编排者
 
-你的 SKILL.md 告诉 AI Agent 如何同时使用 onchainos 命令和你的 MCP 工具：
+你的 SKILL.md 告诉 AI Agent 如何同时使用 onchainos 命令和你的 binary 工具：
 
 ```markdown
 ## Commands
 
-### 查询收益（使用你的 MCP 工具）
-调用 MCP 工具 `calculate_yield`，传入池子地址和链。
+### 查询收益（使用你的 binary 工具）
+调用 binary 工具 `calculate_yield`，传入池子地址和链。
 
-### 执行存入（使用 onchainos + 你的 MCP）
-1. 调用 MCP 工具 `find_best_route` 寻找最优路径
+### 执行存入（使用 onchainos + 你的 binary）
+1. 调用 binary 工具 `find_best_route` 寻找最优路径
 2. 执行 `onchainos swap quote --from USDC --to POOL_TOKEN`
 3. **请用户确认** 金额和预期收益
 4. 执行 `onchainos swap swap ...`
-5. 调用 MCP 工具 `monitor_position` 开始监控
+5. 调用 binary 工具 `monitor_position` 开始监控
 ```
 
 ### 不允许的操作
 
 - 提交预编译的二进制文件（.exe、.dll、.so、.wasm）— E130
-- 声明 MCP/Binary 但没有 build 配置 — E110/E111
+- 声明 Binary 但没有 build 配置 — E110/E111
 - 源码大于 10MB — E126
 - 编译脚本在编译期间从网络下载内容
 
@@ -754,7 +747,7 @@ your-username/my-mcp-server ← 你自己的 GitHub 仓库（源码）
 **Q: 我可以直接调用外部 API 吗？**
 A: 不可以。所有链上操作必须通过 onchainos CLI。如果你需要 onchainos 尚未提供的能力，请在 onchainos 仓库提交 feature request。
 
-**Q: 我可以包含二进制文件或 MCP Server 吗？**
+**Q: 我可以包含binary 吗？**
 A: 可以。任何开发者都可以提交 Binary 源码。将源码放在你自己的 GitHub 仓库中，在 plugin.yaml 中添加 `build` 配置，包含 `source_repo` 和 `source_commit`。我们的 CI 负责编译。详见第 13 节。
 
 **Q: 审核需要多长时间？**
@@ -766,8 +759,6 @@ A: AI 审查仅供参考 — 不会阻止你的 PR。但人工审核者会阅读
 **Q: 发布后可以更新 plugin 吗？**
 A: 可以。提交新的 PR，包含更新后的文件和升级的版本号。
 
-**Q: 如何成为认证开发者（Verified Publisher）？**
-A: 累计 5 次以上审核通过的 plugin 提交后，可以申请 Verified Publisher 等级。这将解锁更高权限和更快的审核速度。
 
 **Q: 本地 `plugin-store lint` 通过了，但 GitHub 检查失败？**
 A: 确保你使用的是最新版本的 plugin-store CLI。同时确保 PR 只修改了 `submissions/你的 plugin 名/` 目录下的文件。
@@ -779,13 +770,13 @@ A: `build.source_repo` 必须是 `owner/repo` 格式（如 `your-username/my-ser
 A: `build.source_commit` 必须是完整的 40 位提交哈希，不能是短 SHA 或分支名。在你的源码仓库中运行 `git rev-parse HEAD` 获取完整哈希。
 
 **Q: 错误 E120 "must also include a Skill component" 是什么意思？**
-A: 每个包含 `build` 配置的 plugin 都必须有 SKILL.md。Skill 是入口 — 它告诉 AI Agent 如何使用你的 MCP Server 或二进制。
+A: 每个包含 `build` 配置的 plugin 都必须有 SKILL.md。Skill 是入口 — 它告诉 AI Agent 如何使用你的 binary 或二进制。
 
 **Q: 错误 E130 "pre-compiled binary file is not allowed" 是什么意思？**
 A: 你在提交目录中包含了编译好的文件（.exe、.dll、.so、.wasm 等）。请删除它 — 我们从你的源码编译，你不需要提交二进制。
 
 **Q: 错误 E110/E111 "requires a build section" 是什么意思？**
-A: 你声明了 MCP 或 Binary 组件但没有 `build` 配置。我们需要知道你的源码在哪里才能编译。添加 `build.lang`、`build.source_repo` 和 `build.source_commit`。
+A: 你声明了 Binary 组件但没有 `build` 配置。我们需要知道你的源码在哪里才能编译。添加 `build.lang`、`build.source_repo` 和 `build.source_commit`。
 
 **Q: CI 中编译失败了，但我本地可以编译。为什么？**
 A: 我们的 CI 在 Ubuntu Linux 上编译。确保你的代码能在 Linux 上编译，而不仅仅是 macOS/Windows。查看 GitHub Actions 运行日志获取具体错误信息。
