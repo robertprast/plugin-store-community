@@ -19,3 +19,4 @@ Demonstrates the standard submission format for Plugin Store community plugins.
 ## License
 
 MIT
+
