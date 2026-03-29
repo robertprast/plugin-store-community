@@ -702,6 +702,177 @@ your-username/<your-plugin-name> ← 你自己的 GitHub 仓库（源码）
  lib.rs
 ```
 
+### 如何提交含二进制的 Plugin（端到端流程）
+
+如果你的 plugin 包含编译的 CLI 工具，你需要**两个仓库**：
+1. **你的源码仓库** — 包含你的 CLI 源码（你自己创建）
+2. **plugin-store-community** — 包含你的 plugin.yaml + SKILL.md（你 fork 这个仓库）
+
+从零到提交成功的完整流程：
+
+#### Step A：创建你的源码仓库
+
+在 GitHub 上新建一个仓库放你的 CLI 源码。我们的 CI 会 clone 这个仓库并编译。
+
+**你的仓库必须能用单条标准命令编译。** 不要用自定义脚本或多步构建。我们的 CI 对每种语言只执行一条编译命令。
+
+每种语言的目录结构要求：
+
+**Rust：**
+```
+your-org/your-tool/
+├── Cargo.toml          ← 必须包含 [[bin]]，name 要和 binary_name 一致
+├── Cargo.lock           ← 提交这个文件（可复现构建）
+└── src/
+    └── main.rs          ← 你的代码
+```
+
+`Cargo.toml` 必须有：
+```toml
+[package]
+name = "your-tool"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "your-tool"      # ← 必须和 plugin.yaml 的 build.binary_name 一致
+path = "src/main.rs"
+```
+
+**Go：**
+```
+your-org/your-tool/
+├── go.mod               ← 必须有 module 声明
+├── go.sum               ← 提交这个文件
+└── main.go              ← 必须有 package main + func main()
+```
+
+**TypeScript：**
+```
+your-org/your-tool/
+├── package.json         ← 必须有 name 和 version
+├── bun.lockb            ← 可选但推荐
+├── tsconfig.json        ← 可选
+└── src/
+    └── index.ts         ← 这个路径填到 build.main
+```
+
+**Python：**
+```
+your-org/your-tool/
+├── pyproject.toml       ← 必须有 [project]，含 name 和 version
+└── src/
+    └── main.py          ← 这个路径填到 build.main
+```
+
+#### Step B：确保本地能编译
+
+提交前用我们 CI 的精确命令验证：
+
+```bash
+# Rust
+cd your-tool && cargo build --release
+# 验证：target/release/your-tool 存在
+
+# Go
+cd your-tool && CGO_ENABLED=0 go build -o your-tool -ldflags="-s -w" .
+# 验证：./your-tool 存在
+
+# TypeScript
+cd your-tool && bun install && bun build --compile src/index.ts --outfile your-tool
+# 验证：./your-tool 存在
+
+# Python
+cd your-tool && pip install pyinstaller && pyinstaller --onefile --name your-tool src/main.py
+# 验证：dist/your-tool 存在
+```
+
+如果用这些命令编译不过，我们的 CI 也编译不过。
+
+#### Step C：推送并获取 commit SHA
+
+```bash
+cd your-tool
+git add -A
+git commit -m "v1.0.0"
+git push origin main
+
+# 获取完整 40 位 SHA — 填入 plugin.yaml
+git rev-parse HEAD
+# 输出：a1b2c3d4e5f6789012345678901234567890abcd
+```
+
+> commit 必须已推送到 GitHub。我们的 CI 从 GitHub 上的这个 SHA 克隆。
+
+#### Step D：创建 plugin 提交
+
+回到 plugin-store-community 创建你的 plugin：
+
+```bash
+git clone --depth=1 git@github.com:YOUR_USERNAME/plugin-store-community.git
+cd plugin-store-community
+plugin-store init <your-plugin-name>
+```
+
+编辑 `submissions/<your-plugin-name>/plugin.yaml`：
+
+```yaml
+schema_version: 1
+name: <your-plugin-name>
+version: "1.0.0"
+description: "你的 plugin 做什么"
+author:
+  name: "你的名字"
+  github: "your-username"
+license: MIT
+category: utility
+tags: [your-tags]
+
+components:
+  skill:
+    dir: skills/<your-plugin-name>
+
+build:
+  lang: rust                             # rust | go | typescript | python
+  source_repo: "your-org/your-tool"      # Step A 创建的 GitHub 仓库
+  source_commit: "a1b2c3d4e5f6..."       # Step C 获取的 SHA
+  source_dir: "."                         # 仓库内路径（通常是根目录）
+  binary_name: "your-tool"               # 必须和编译产物名一致
+
+api_calls: []
+```
+
+编辑 `submissions/<your-plugin-name>/skills/<your-plugin-name>/SKILL.md`，描述 AI agent 如何使用你的二进制工具和 onchainos 命令。
+
+#### Step E：Lint、推送、创建 PR
+
+```bash
+plugin-store lint ./submissions/<your-plugin-name>/
+git checkout -b submit/<your-plugin-name>
+git add submissions/<your-plugin-name>/
+git commit -m "[new-plugin] <your-plugin-name> v1.0.0"
+git push origin submit/<your-plugin-name>
+```
+
+从你的 fork 向 `okx/plugin-store-community` 创建 PR。我们的 CI 会：
+1. Lint 检查 plugin.yaml + SKILL.md
+2. AI 审查你的代码（读取你的源码仓库）
+3. Clone 你的源码 → 编译 → 验证二进制可用
+4. 在 PR 上发布报告
+
+#### 常见编译失败
+
+| 问题 | 原因 | 修复 |
+|------|------|------|
+| "Binary not found" | `binary_name` 和编译产物名不匹配 | Rust：检查 Cargo.toml 的 `[[bin]] name`。Go：检查 `-o` 参数。 |
+| "source_commit is not valid" | 用了短 SHA 或分支名 | 用完整 40 位：`git rev-parse HEAD` |
+| "source_repo format invalid" | 格式错误 | 必须是 `owner/repo`，不是 `https://github.com/...` |
+| CI 编译失败但本地能编译 | 平台差异 | 我们的 CI 运行在 Ubuntu Linux，确保你的代码在 Linux 上能编译 |
+| 找不到 Cargo.lock | 没有提交 | 运行 `cargo generate-lockfile` 并提交 `Cargo.lock` |
+| Python import 错误 | 缺少依赖 | 确保所有依赖在 `pyproject.toml` 或 `requirements.txt` 中 |
+
+---
+
 ### 支持的语言
 
 | 语言 | 入口文件 | 编译工具 | 产物 |

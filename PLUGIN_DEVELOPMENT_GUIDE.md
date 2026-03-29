@@ -665,6 +665,177 @@ your-username/<your-plugin-name>           ← Your own GitHub repo (source code
     lib.rs
 ```
 
+### How to Submit a Binary Plugin (End-to-End)
+
+If your plugin includes a compiled CLI tool, you need **two repos**:
+1. **Your source code repo** — contains your CLI source code (you create this)
+2. **plugin-store-community** — contains your plugin.yaml + SKILL.md (you fork this)
+
+Here's the full workflow from zero to a working binary plugin submission:
+
+#### Step A: Create your source code repo
+
+Create a new GitHub repo for your CLI tool. Our CI will clone this repo and compile it.
+
+**Your repo must compile with a single standard command.** No custom scripts, no multi-step builds. Our CI runs exactly one build command per language.
+
+Required directory structure per language:
+
+**Rust:**
+```
+your-org/your-tool/
+├── Cargo.toml          ← MUST contain [[bin]] with name matching binary_name
+├── Cargo.lock           ← commit this (reproducible builds)
+└── src/
+    └── main.rs          ← your code
+```
+
+`Cargo.toml` must have:
+```toml
+[package]
+name = "your-tool"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "your-tool"      # ← this MUST match build.binary_name in plugin.yaml
+path = "src/main.rs"
+```
+
+**Go:**
+```
+your-org/your-tool/
+├── go.mod               ← MUST have module declaration
+├── go.sum               ← commit this
+└── main.go              ← must have package main + func main()
+```
+
+**TypeScript:**
+```
+your-org/your-tool/
+├── package.json         ← MUST have name and version
+├── bun.lockb            ← optional but recommended
+├── tsconfig.json        ← optional
+└── src/
+    └── index.ts         ← this path goes in build.main
+```
+
+**Python:**
+```
+your-org/your-tool/
+├── pyproject.toml       ← MUST have [project] with name and version
+└── src/
+    └── main.py          ← this path goes in build.main
+```
+
+#### Step B: Make sure it compiles locally
+
+Before submitting, verify your code compiles with the exact command our CI uses:
+
+```bash
+# Rust
+cd your-tool && cargo build --release
+# Verify: target/release/your-tool exists
+
+# Go
+cd your-tool && CGO_ENABLED=0 go build -o your-tool -ldflags="-s -w" .
+# Verify: ./your-tool exists
+
+# TypeScript
+cd your-tool && bun install && bun build --compile src/index.ts --outfile your-tool
+# Verify: ./your-tool exists
+
+# Python
+cd your-tool && pip install pyinstaller && pyinstaller --onefile --name your-tool src/main.py
+# Verify: dist/your-tool exists
+```
+
+If it doesn't compile with these exact commands, our CI won't be able to build it.
+
+#### Step C: Push and get the commit SHA
+
+```bash
+cd your-tool
+git add -A
+git commit -m "v1.0.0"
+git push origin main
+
+# Get the full 40-char SHA — this goes in plugin.yaml
+git rev-parse HEAD
+# Output: a1b2c3d4e5f6789012345678901234567890abcd
+```
+
+> The commit must exist on GitHub. Our CI clones from GitHub at this exact SHA.
+
+#### Step D: Create the plugin submission
+
+Now go to plugin-store-community and create your plugin:
+
+```bash
+git clone --depth=1 git@github.com:YOUR_USERNAME/plugin-store-community.git
+cd plugin-store-community
+plugin-store init <your-plugin-name>
+```
+
+Edit `submissions/<your-plugin-name>/plugin.yaml`:
+
+```yaml
+schema_version: 1
+name: <your-plugin-name>
+version: "1.0.0"
+description: "What your plugin does"
+author:
+  name: "Your Name"
+  github: "your-username"
+license: MIT
+category: utility
+tags: [your-tags]
+
+components:
+  skill:
+    dir: skills/<your-plugin-name>
+
+build:
+  lang: rust                             # rust | go | typescript | python
+  source_repo: "your-org/your-tool"      # your GitHub repo from Step A
+  source_commit: "a1b2c3d4e5f6..."       # SHA from Step C
+  source_dir: "."                         # path within repo (usually root)
+  binary_name: "your-tool"               # must match what the compiler outputs
+
+api_calls: []
+```
+
+Edit `submissions/<your-plugin-name>/skills/<your-plugin-name>/SKILL.md` to describe how the AI agent should use your binary tool alongside onchainos commands.
+
+#### Step E: Lint, push, and PR
+
+```bash
+plugin-store lint ./submissions/<your-plugin-name>/
+git checkout -b submit/<your-plugin-name>
+git add submissions/<your-plugin-name>/
+git commit -m "[new-plugin] <your-plugin-name> v1.0.0"
+git push origin submit/<your-plugin-name>
+```
+
+Open a PR from your fork to `okx/plugin-store-community`. Our CI will:
+1. Lint your plugin.yaml + SKILL.md
+2. AI review your code (reads your source repo at the pinned SHA)
+3. Clone your source repo → compile → verify the binary works
+4. Post reports on the PR
+
+#### Common Build Failures
+
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| "Binary not found" | `binary_name` doesn't match compiled output | Rust: check `[[bin]] name` in Cargo.toml. Go: check `-o` flag. |
+| "source_commit is not valid" | Short SHA or branch name used | Use full 40-char: `git rev-parse HEAD` |
+| "source_repo format invalid" | Wrong format | Must be `owner/repo`, not `https://github.com/...` |
+| Build fails but works locally | Platform difference | Our CI runs Ubuntu Linux. Ensure your code compiles on Linux. |
+| Cargo.lock not found | Not committed | Run `cargo generate-lockfile` and commit `Cargo.lock`. |
+| Python import error | Missing dependency | Ensure all deps are in `pyproject.toml` or `requirements.txt`. |
+
+---
+
 ### Supported Languages
 
 | Language | Entry File | Build Tool | Output |
