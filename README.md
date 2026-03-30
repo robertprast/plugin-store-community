@@ -54,6 +54,8 @@ Then edit `SKILL.md` — it teaches the AI agent how to use your plugin. The gen
 
 > **Important:** All on-chain interactions — wallet signing, transaction broadcasting, swap execution, contract calls — **must** use [onchainos CLI](https://github.com/okx/onchainos-skills). You are free to query external data sources (third-party DeFi APIs, market data providers, etc.), but any action that touches the blockchain must go through onchainos. Plugins that bypass onchainos for on-chain operations will be rejected.
 
+**Want to include a CLI binary?** Add a `build` section to plugin.yaml pointing to your source repo. Our CI compiles Rust/Go into native binaries; TS/Node are distributed via `npm install`; Python via `pip install`. See the [Development Guide](./PLUGIN_DEVELOPMENT_GUIDE.md#section-13) for details.
+
 ### Step 3: Check locally
 
 ```bash
@@ -80,7 +82,7 @@ Your PR automatically gets:
 ```
 ✅ Structure check (~30s)     — bot validates plugin.yaml + SKILL.md
 📋 AI code review (~2min)     — Claude reads your code and writes a report
-🔨 Build check (if binary)    — compiles your source code
+🔨 Build check (if binary)    — compiles Rust/Go source; validates TS/Node/Python packages
 👤 Human review (1-3 days)    — maintainer reads AI report, clicks Merge
 ```
 
