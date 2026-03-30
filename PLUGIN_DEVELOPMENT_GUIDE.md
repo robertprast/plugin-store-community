@@ -713,27 +713,75 @@ your-org/your-tool/
 **TypeScript:**
 ```
 your-org/your-tool/
-├── package.json         ← MUST have name and version
-├── bun.lockb            ← optional but recommended
-├── tsconfig.json        ← optional
+├── package.json         ← MUST have name, version, and "bin" field
 └── src/
-    └── index.ts         ← this path goes in build.main
+    └── index.js         ← Compiled to JS, first line MUST be #!/usr/bin/env node
+```
+
+> **Important:** TypeScript plugins are distributed via `npm install -g`, not compiled to binary.
+> Your `package.json` must include a `"bin"` field pointing to the JS entry file, and the entry file must start with `#!/usr/bin/env node`.
+> If you write in TypeScript, compile to JS before pushing to your source repo.
+
+`package.json` example:
+```json
+{
+  "name": "your-tool",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "your-tool": "src/index.js"
+  }
+}
 ```
 
 **Node.js:**
 ```
 your-org/your-tool/
-├── package.json         ← MUST have name and version
+├── package.json         ← MUST have name, version, and "bin" field
 └── src/
-    └── index.js         ← this path goes in build.main
+    └── index.js         ← First line MUST be #!/usr/bin/env node
+```
+
+> **Important:** Node.js plugins are distributed via `npm install -g`, not compiled to binary.
+> Your `package.json` must include a `"bin"` field, and the entry file must start with `#!/usr/bin/env node`.
+
+`package.json` example:
+```json
+{
+  "name": "your-tool",
+  "version": "1.0.0",
+  "bin": {
+    "your-tool": "src/index.js"
+  }
+}
 ```
 
 **Python:**
 ```
 your-org/your-tool/
-├── pyproject.toml       ← MUST have [project] with name and version
+├── pyproject.toml       ← MUST have [build-system], [project] (with name, version), and [project.scripts]
+├── setup.py             ← Recommended for compatibility with older pip versions
 └── src/
-    └── main.py          ← this path goes in build.main
+    ├── __init__.py
+    └── main.py          ← This path goes in build.main; must have def main() entry
+```
+
+> **Important:** Python plugins are distributed via `pip install`, not compiled to binary.
+> Your `pyproject.toml` must include `[project.scripts]` to define the CLI entry point. We recommend also providing `setup.py` for older pip compatibility.
+
+`pyproject.toml` example:
+```toml
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "your-tool"
+version = "1.0.0"
+requires-python = ">=3.8"
+
+[project.scripts]
+your-tool = "src.main:main"
 ```
 
 #### Step B: Make sure it compiles locally
@@ -749,20 +797,18 @@ cd your-tool && cargo build --release
 cd your-tool && CGO_ENABLED=0 go build -o your-tool -ldflags="-s -w" .
 # Verify: ./your-tool exists
 
-# TypeScript
-cd your-tool && bun install && bun build --compile src/index.ts --outfile your-tool
-# Verify: ./your-tool exists
-
-# Node.js
-cd your-tool && bun install && bun build --compile src/index.js --outfile your-tool
-# Verify: ./your-tool exists
+# TypeScript / Node.js
+cd your-tool && npm install -g .
+# Verify: your-tool --help runs successfully
+# Note: package.json must have "bin" field, entry file must have #!/usr/bin/env node
 
 # Python
-cd your-tool && pip install pyinstaller && pyinstaller --onefile --name your-tool src/main.py
-# Verify: pip install succeeds and entry point responds
+cd your-tool && pip install .
+# Verify: your-tool --help runs successfully
+# Note: pyproject.toml must have [project.scripts], entry function must be def main()
 ```
 
-If it doesn't compile with these exact commands, our CI won't be able to build it.
+If these commands fail locally, our CI will also fail.
 
 #### Step C: Push and get the commit SHA
 
@@ -854,9 +900,9 @@ Open a PR from your fork to `okx/plugin-store-community`. Our CI will:
 |----------|-----------|------------|--------|
 | Rust | `Cargo.toml` | `cargo build --release` | Native binary |
 | Go | `go.mod` | `go build` | Native binary |
-| TypeScript | `package.json` + `build.main` | `bun build --compile` | Bundled binary |
-| Python | `pyproject.toml` + `build.main` | `pip install` | pip package (requires Python) |
-| Node.js | `package.json` + `build.main` | `bun build --compile` | Bundled binary |
+| TypeScript | `package.json` + `bin` | `npm install -g` | npm source package (~KB) |
+| Node.js | `package.json` + `bin` | `npm install -g` | npm source package (~KB) |
+| Python | `pyproject.toml` + `[project.scripts]` | `pip install` | pip source package (~KB) |
 
 ### Build Config — Complete Examples for Each Language
 
@@ -870,7 +916,7 @@ Every `build` field explained:
 | `source_dir` | No | Path within repo to source root (default: `.`) |
 | `entry` | No | Entry file override (default: auto-detected per language) |
 | `binary_name` | Yes | Name of the compiled output binary |
-| `main` | TS/Python only | Entry point file (e.g. `src/index.ts`, `src/main.py`) |
+| `main` | TS/Node/Python | Entry point file (e.g. `src/index.js`, `src/main.py`) |
 | `targets` | No | Limit build platforms (default: all supported) |
 
 #### Rust
@@ -917,16 +963,16 @@ build:
   source_repo: "your-org/your-ts-tool"
   source_commit: "c3d4e5f6789012345678901234567890abcdef01"
   source_dir: "."
-  entry: "package.json"                  # default for TypeScript, can omit
   binary_name: "your-tool"
-  main: "src/index.ts"                   # REQUIRED for TypeScript
-  targets:
-    - x86_64-unknown-linux-gnu
-    - aarch64-apple-darwin
+  main: "src/index.js"                   # REQUIRED — must be JS (not .ts)
 ```
 
-CI runs: `bun install` → `bun audit` → `bun build --compile src/index.ts --outfile your-tool`
-Output: self-contained binary with embedded Bun runtime (~30-60MB)
+Distribution: `npm install -g git+https://github.com/your-org/your-ts-tool#commit`
+Requires: Node.js + npm
+Output size: ~KB (source install, no large binary download)
+
+> **Note:** `package.json` must include a `"bin"` field, and entry file must start with `#!/usr/bin/env node`.
+> If writing in TypeScript, compile to JS before pushing to your source repo.
 
 #### Python
 
@@ -936,16 +982,16 @@ build:
   source_repo: "your-org/your-python-tool"
   source_commit: "d4e5f6789012345678901234567890abcdef0123"
   source_dir: "."
-  entry: "pyproject.toml"               # default for Python, can omit
   binary_name: "your-tool"
   main: "src/main.py"                    # REQUIRED for Python
-  targets:
-    - x86_64-unknown-linux-gnu
-    - aarch64-apple-darwin
 ```
 
-CI runs: `pip install -e .` → `pip-audit` (security scan) → verify entry point works
-Output: pip package (users install via `pip install` at runtime — requires Python 3.10+)
+Distribution: `pip install git+https://github.com/your-org/your-python-tool@commit`
+Requires: Python 3.8+ and pip/pip3
+Output size: ~KB (source install)
+
+> **Note:** `pyproject.toml` must include `[build-system]`, `[project]`, and `[project.scripts]`.
+> We recommend also providing `setup.py` for older pip compatibility. Entry function must be `def main()`.
 
 #### Node.js
 
@@ -955,18 +1001,17 @@ build:
   source_repo: "your-org/your-node-tool"
   source_commit: "e5f6789012345678901234567890abcdef012345"
   source_dir: "."
-  entry: "package.json"                  # default for Node.js, can omit
   binary_name: "your-tool"
   main: "src/index.js"                   # REQUIRED for Node.js
-  targets:
-    - x86_64-unknown-linux-gnu
-    - aarch64-apple-darwin
 ```
 
-CI runs: `bun install` → `bun build --compile src/index.js --outfile your-tool`
-Output: self-contained binary with embedded Bun runtime (~30-60MB)
+Distribution: `npm install -g git+https://github.com/your-org/your-node-tool#commit`
+Requires: Node.js + npm
+Output size: ~KB (source install)
 
-> Node.js and TypeScript use the same compiler (Bun). The only difference is the entry file extension (`.js` vs `.ts`).
+> **Note:** `package.json` must include a `"bin"` field, and entry file must start with `#!/usr/bin/env node`.
+
+> Node.js and TypeScript use the same distribution method (npm install). The only difference is that TypeScript must be compiled to JS first.
 
 ### SKILL.md as the Orchestrator
 

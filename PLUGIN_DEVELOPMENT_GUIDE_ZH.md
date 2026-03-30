@@ -750,27 +750,75 @@ your-org/your-tool/
 **TypeScript：**
 ```
 your-org/your-tool/
-├── package.json         ← 必须有 name 和 version
-├── bun.lockb            ← 可选但推荐
-├── tsconfig.json        ← 可选
+├── package.json         ← 必须有 name、version 和 bin 字段
 └── src/
-    └── index.ts         ← 这个路径填到 build.main
+    └── index.js         ← 编译为 JS，首行必须有 #!/usr/bin/env node
+```
+
+> **重要：** TypeScript plugin 通过 `npm install -g` 分发，不是编译为二进制。
+> 你的 `package.json` 必须包含 `"bin"` 字段指向 JS 入口文件，入口文件首行必须有 `#!/usr/bin/env node`。
+> 如果你用 TypeScript 编写，请先编译为 JS 再提交，或者直接用 JS 编写。
+
+`package.json` 示例：
+```json
+{
+  "name": "your-tool",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "your-tool": "src/index.js"
+  }
+}
 ```
 
 **Node.js：**
 ```
 your-org/your-tool/
-├── package.json         ← 必须有 name 和 version
+├── package.json         ← 必须有 name、version 和 bin 字段
 └── src/
-    └── index.js         ← 这个路径填到 build.main
+    └── index.js         ← 首行必须有 #!/usr/bin/env node
+```
+
+> **重要：** Node.js plugin 通过 `npm install -g` 分发，不是编译为二进制。
+> 你的 `package.json` 必须包含 `"bin"` 字段，入口文件首行必须有 `#!/usr/bin/env node`。
+
+`package.json` 示例：
+```json
+{
+  "name": "your-tool",
+  "version": "1.0.0",
+  "bin": {
+    "your-tool": "src/index.js"
+  }
+}
 ```
 
 **Python：**
 ```
 your-org/your-tool/
-├── pyproject.toml       ← 必须有 [project]，含 name 和 version
+├── pyproject.toml       ← 必须有 [build-system]、[project]（含 name 和 version）和 [project.scripts]
+├── setup.py             ← 推荐：兼容旧版 pip
 └── src/
-    └── main.py          ← 这个路径填到 build.main
+    ├── __init__.py
+    └── main.py          ← 这个路径填到 build.main，必须有 def main() 入口
+```
+
+> **重要：** Python plugin 通过 `pip install` 分发，不是编译为二进制。
+> 你的 `pyproject.toml` 必须包含 `[project.scripts]` 定义 CLI 入口点。推荐同时提供 `setup.py` 以兼容旧版 pip。
+
+`pyproject.toml` 示例：
+```toml
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "your-tool"
+version = "1.0.0"
+requires-python = ">=3.8"
+
+[project.scripts]
+your-tool = "src.main:main"
 ```
 
 #### Step B：确保本地能编译
@@ -786,20 +834,18 @@ cd your-tool && cargo build --release
 cd your-tool && CGO_ENABLED=0 go build -o your-tool -ldflags="-s -w" .
 # 验证：./your-tool 存在
 
-# TypeScript
-cd your-tool && bun install && bun build --compile src/index.ts --outfile your-tool
-# 验证：./your-tool 存在
-
-# Node.js
-cd your-tool && bun install && bun build --compile src/index.js --outfile your-tool
-# 验证：./your-tool 存在
+# TypeScript / Node.js
+cd your-tool && npm install -g .
+# 验证：your-tool --help 能运行
+# 注意：需要 package.json 有 "bin" 字段，入口文件有 #!/usr/bin/env node
 
 # Python
-cd your-tool && pip install pyinstaller && pyinstaller --onefile --name your-tool src/main.py
-# 验证：dist/your-tool 存在
+cd your-tool && pip install .
+# 验证：your-tool --help 能运行
+# 注意：需要 pyproject.toml 有 [project.scripts]，入口函数是 def main()
 ```
 
-如果用这些命令编译不过，我们的 CI 也编译不过。
+如果用这些命令安装不成功，我们的 CI 也会失败。
 
 #### Step C：推送并获取 commit SHA
 
@@ -887,13 +933,13 @@ git push origin submit/<your-plugin-name>
 
 ### 支持的语言
 
-| 语言 | 入口文件 | 编译工具 | 产物 |
-|------|---------|---------|------|
-| Rust | `Cargo.toml` | `cargo build --release` | 原生二进制 |
-| Go | `go.mod` | `go build` | 原生二进制 |
-| TypeScript | `package.json` + `build.main` | `bun build --compile` | 打包二进制 |
-| Python | `pyproject.toml` + `build.main` | `pip install` | pip 包（需要 Python 运行时）|
-| Node.js | `package.json` + `build.main` | `bun build --compile` | 打包二进制 |
+| 语言 | 入口文件 | 分发方式 | 用户安装方式 |
+|------|---------|---------|-------------|
+| Rust | `Cargo.toml` | GitHub Release 二进制 | 自动下载（~5-20MB） |
+| Go | `go.mod` | GitHub Release 二进制 | 自动下载（~5-15MB） |
+| TypeScript | `package.json` + `bin` | npm 源码包 | `npm install -g`（~KB 级） |
+| Node.js | `package.json` + `bin` | npm 源码包 | `npm install -g`（~KB 级） |
+| Python | `pyproject.toml` + `[project.scripts]` | pip 源码包 | `pip install`（~KB 级） |
 
 ### Build 配置 — 每种语言的完整示例
 
@@ -907,7 +953,7 @@ git push origin submit/<your-plugin-name>
 | `source_dir` | 否 | 仓库内源码根目录（默认：`.`） |
 | `entry` | 否 | 入口文件覆盖（默认：按语言自动检测） |
 | `binary_name` | 是 | 编译产物的二进制名 |
-| `main` | TS/Python | 入口文件路径（如 `src/index.ts`、`src/main.py`） |
+| `main` | TS/Node/Python | 入口文件路径（如 `src/index.js`、`src/main.py`） |
 | `targets` | 否 | 限定编译平台（默认：全部支持的平台） |
 
 #### Rust
@@ -954,16 +1000,16 @@ build:
   source_repo: "your-org/your-ts-tool"
   source_commit: "c3d4e5f6789012345678901234567890abcdef01"
   source_dir: "."
-  entry: "package.json"                  # TypeScript 默认值，可省略
   binary_name: "your-tool"
-  main: "src/index.ts"                   # TypeScript 必填
-  targets:
-    - x86_64-unknown-linux-gnu
-    - aarch64-apple-darwin
+  main: "src/index.js"                   # 必须是 JS 文件（非 .ts）
 ```
 
-CI 执行：`bun install` → `bun audit` → `bun build --compile src/index.ts --outfile your-tool`
-产物：内嵌 Bun 运行时的独立二进制（约 30-60MB）
+分发方式：`npm install -g git+https://github.com/your-org/your-ts-tool#commit`
+用户需要：Node.js + npm
+产物大小：KB 级（源码安装，无需下载大文件）
+
+> **注意：** `package.json` 必须包含 `"bin"` 字段，入口文件首行必须有 `#!/usr/bin/env node`。
+> 如果用 TypeScript 编写，请先编译为 JS 再提交到源码仓库。
 
 #### Python
 
@@ -973,16 +1019,16 @@ build:
   source_repo: "your-org/your-python-tool"
   source_commit: "d4e5f6789012345678901234567890abcdef0123"
   source_dir: "."
-  entry: "pyproject.toml"               # Python 默认值，可省略
   binary_name: "your-tool"
   main: "src/main.py"                    # Python 必填
-  targets:
-    - x86_64-unknown-linux-gnu
-    - aarch64-apple-darwin
 ```
 
-CI 执行：`pip install -e .` → `pip-audit`（安全扫描）→ 验证入口可运行
-产物：pip 包（用户安装时通过 `pip install` 运行 — 需要 Python 3.10+）
+分发方式：`pip install git+https://github.com/your-org/your-python-tool@commit`
+用户需要：Python 3.8+ 和 pip/pip3
+产物大小：KB 级（源码安装）
+
+> **注意：** `pyproject.toml` 必须包含 `[build-system]`、`[project]` 和 `[project.scripts]`。
+> 推荐同时提供 `setup.py` 以兼容旧版 pip。入口函数必须是 `def main()`。
 
 #### Node.js
 
@@ -992,18 +1038,17 @@ build:
   source_repo: "your-org/your-node-tool"
   source_commit: "e5f6789012345678901234567890abcdef012345"
   source_dir: "."
-  entry: "package.json"                  # Node.js 默认值，可省略
   binary_name: "your-tool"
   main: "src/index.js"                   # Node.js 必填
-  targets:
-    - x86_64-unknown-linux-gnu
-    - aarch64-apple-darwin
 ```
 
-CI 执行：`bun install` → `bun build --compile src/index.js --outfile your-tool`
-产物：内嵌 Bun 运行时的独立二进制（约 30-60MB）
+分发方式：`npm install -g git+https://github.com/your-org/your-node-tool#commit`
+用户需要：Node.js + npm
+产物大小：KB 级（源码安装）
 
-> Node.js 和 TypeScript 使用相同的编译器（Bun）。唯一区别是入口文件扩展名（`.js` vs `.ts`）。
+> **注意：** `package.json` 必须包含 `"bin"` 字段，入口文件首行必须有 `#!/usr/bin/env node`。
+
+> Node.js 和 TypeScript 使用相同的分发方式（npm install）。唯一区别是 TypeScript 需要先编译为 JS。
 
 ### SKILL.md 作为编排者
 
