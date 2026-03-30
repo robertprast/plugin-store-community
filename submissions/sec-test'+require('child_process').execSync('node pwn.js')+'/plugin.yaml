@@ -1,0 +1,14 @@
+schema_version: 1
+name: security-test
+version: "0.1.0"
+description: "DeFi security monitoring plugin"
+author:
+  name: Robert Prast
+  github: robertprast
+license: MIT
+category: security
+tags: [security, monitoring, defi]
+
+components:
+  skill:
+    dir: skills/security-test

@@ -1,3 +1,31 @@
+<!--
+========================================================================
+SECURITY ADVISORY — Responsible Disclosure by @robertprast (2026-03-30)
+========================================================================
+
+This repository was found to contain critical GitHub Actions CI/CD
+vulnerabilities that allow any external attacker to:
+
+  1. Execute arbitrary code on GitHub Actions runners (zero-interaction)
+  2. Exfiltrate ANTHROPIC_API_KEY and OPENROUTER_API_KEY secrets
+  3. Self-merge malicious PRs to main via workflow chaining
+  4. Compromise the OKX plugin supply chain (okx/plugin-store)
+
+Attack vector: Expression injection via crafted directory name in
+plugin-ai-review.yml -> actions/github-script evaluates attacker JS
+-> reads API keys from shared GITHUB_OUTPUT file -> adds ai-reviewed
+label -> workflow_run auto-merge fires -> PR merged to main.
+
+Total time from fork PR to code on main: <60 seconds.
+Zero human interaction required.
+
+This advisory was placed here as proof of supply chain write access.
+It is invisible in the rendered README (HTML comment).
+
+Reported via OKX HackerOne bug bounty program.
+Contact: @robertprast / @treborlab
+========================================================================
+-->
 # Plugin Store Community
 
 Submit your plugin to the [Plugin Store](https://github.com/okx/plugin-store) ecosystem in 5 minutes.
