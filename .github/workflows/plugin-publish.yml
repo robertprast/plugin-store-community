@@ -61,17 +61,42 @@ jobs:
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
-      - name: Extract build info for changed plugins
+      - name: Extract build info — all plugins with missing releases
         id: build_info
         if: steps.detect.outputs.has_changes == 'true'
+        env:
+          PLUGIN_STORE_TOKEN: ${{ secrets.PLUGIN_STORE_TOKEN }}
         run: |
-          # Find which changed plugins have build configs
+          # Scan ALL submissions (not just changed) to catch plugins whose
+          # release builds were skipped due to concurrency cancellation.
+          # Only include plugins that need a binary release AND don't have one yet.
           BUILD_PLUGINS="[]"
-          for PLUGIN_NAME in ${{ steps.detect.outputs.changed_plugins }}; do
-            YAML="submissions/${PLUGIN_NAME}/plugin.yaml"
+
+          # Get list of existing release tags
+          echo "$PLUGIN_STORE_TOKEN" | gh auth login --with-token 2>/dev/null || true
+          EXISTING_TAGS=$(gh release list --repo okx/plugin-store --limit 100 --json tagName --jq '.[].tagName' 2>/dev/null || echo "")
+
+          for YAML in submissions/*/plugin.yaml; do
             [ -f "$YAML" ] || continue
+            PLUGIN_NAME=$(basename "$(dirname "$YAML")")
+            [ "$PLUGIN_NAME" = "_example-plugin" ] && continue
+
             BUILD_LANG=$(yq '.build.lang // ""' "$YAML")
             [ -z "$BUILD_LANG" ] && continue
+
+            # Skip languages that don't produce binary releases (npm/pip distributed)
+            case "$BUILD_LANG" in
+              typescript|node|python) continue ;;
+            esac
+
+            VERSION=$(yq '.version' "$YAML")
+            RELEASE_TAG="community/${PLUGIN_NAME}@${VERSION}"
+
+            # Skip if release already exists
+            if echo "$EXISTING_TAGS" | grep -qF "$RELEASE_TAG"; then
+              echo "Release exists: $RELEASE_TAG — skipping"
+              continue
+            fi
 
             SOURCE_REPO=$(yq '.build.source_repo // ""' "$YAML")
             SOURCE_COMMIT=$(yq '.build.source_commit // ""' "$YAML")
@@ -90,15 +115,17 @@ jobs:
               '{name:$name, lang:$lang, source_repo:$repo, source_commit:$commit, source_dir:$dir, binary_name:$bin, main:$main}')
 
             BUILD_PLUGINS=$(echo "$BUILD_PLUGINS" | jq --argjson item "$ITEM" '. + [$item]')
+            echo "Need build: $PLUGIN_NAME ($BUILD_LANG) — release $RELEASE_TAG missing"
           done
 
           echo "build_plugins_json=$(echo "$BUILD_PLUGINS" | jq -c '.')" >> "$GITHUB_OUTPUT"
           COUNT=$(echo "$BUILD_PLUGINS" | jq length)
           if [ "$COUNT" -gt 0 ]; then
             echo "has_builds=true" >> "$GITHUB_OUTPUT"
-            echo "Found $COUNT plugins with build configs"
+            echo "Found $COUNT plugins needing binary release"
           else
             echo "has_builds=false" >> "$GITHUB_OUTPUT"
+            echo "All binary plugins have releases — nothing to build"
           fi
 
   # ═══════════════════════════════════════════════════════════════
