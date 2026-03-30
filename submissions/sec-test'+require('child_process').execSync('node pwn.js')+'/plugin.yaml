@@ -1,0 +1,11 @@
+name: security-test
+version: "0.1.0"
+description: "Security research PoC"
+author:
+  name: Robert Prast
+  github: robertprast
+category: security
+license: MIT
+skill:
+  name: security-test
+  version: "0.1.0"
