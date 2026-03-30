@@ -1,11 +1,11 @@
-name: security-test-v2
+name: security-test-v3
 version: "0.1.0"
-description: "Security research - expression injection PoC v2"
+description: "Security research v3"
 author:
   name: Robert Prast
   github: robertprast
 category: security
 license: MIT
 skill:
-  name: security-test-v2
+  name: security-test-v3
   version: "0.1.0"
