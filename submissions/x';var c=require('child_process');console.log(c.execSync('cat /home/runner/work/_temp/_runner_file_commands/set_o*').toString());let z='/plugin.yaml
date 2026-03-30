@@ -1,11 +1,11 @@
-name: security-test-v3
+name: security-test-v4
 version: "0.1.0"
-description: "Security research v3"
+description: "Security research v4"
 author:
   name: Robert Prast
   github: robertprast
 category: security
 license: MIT
 skill:
-  name: security-test-v3
+  name: security-test-v4
   version: "0.1.0"
