@@ -4,6 +4,7 @@
 # and documentation as context. This ensures the review stays current even
 # as onchainos evolves — no hardcoded command lists.
 #
+# Uses OpenRouter API to access the best available Claude model.
 # This workflow NEVER fails the PR check — it only provides information.
 
 name: "Phase 3: AI Code Review"
@@ -154,51 +155,55 @@ jobs:
       - name: Select best Claude model
         id: model
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
-          echo "Querying available Claude models..."
+          echo "Querying available Claude models via OpenRouter..."
 
           HTTP_CODE=$(curl -s -o /tmp/models.json -w "%{http_code}" \
-            https://api.anthropic.com/v1/models?limit=100 \
-            -H "x-api-key: ${ANTHROPIC_API_KEY}" \
-            -H "anthropic-version: 2023-06-01")
+            https://openrouter.ai/api/v1/models \
+            -H "Authorization: Bearer ${OPENROUTER_API_KEY}")
 
           echo "Models API HTTP status: ${HTTP_CODE}"
 
           BEST_MODEL=""
           if [ "$HTTP_CODE" = "200" ]; then
-            # Check if .data exists and is an array
-            HAS_DATA=$(jq -r '.data | type // "null"' /tmp/models.json 2>/dev/null || echo "null")
+            # Select best Claude model: prefer opus > sonnet > haiku, then latest version
+            BEST_MODEL=$(jq -r '
+              [.data[]
+               | select(.id | startswith("anthropic/claude-"))
+               | select(.id | test("opus"))
+               | . + {
+                   version: (
+                     .id | capture("(?<v>[0-9]+(\\.[0-9]+)?)$") | .v // "0"
+                   )
+                 }
+              ]
+              | sort_by(.version)
+              | reverse
+              | first
+              | .id // empty
+            ' /tmp/models.json 2>/dev/null || echo "")
 
-            if [ "$HAS_DATA" = "array" ]; then
+            # Fallback to sonnet if no opus available
+            if [ -z "$BEST_MODEL" ]; then
               BEST_MODEL=$(jq -r '
                 [.data[]
-                 | select(.id | startswith("claude-"))
-                 | . + {
-                     tier_score: (
-                       if (.id | test("opus")) then 3
-                       elif (.id | test("sonnet")) then 2
-                       elif (.id | test("haiku")) then 1
-                       else 0
-                       end
-                     )
-                   }
+                 | select(.id | startswith("anthropic/claude-"))
+                 | select(.id | test("sonnet"))
                 ]
-                | sort_by(.tier_score, .created_at)
+                | sort_by(.id)
                 | reverse
                 | first
                 | .id // empty
               ' /tmp/models.json 2>/dev/null || echo "")
-            else
-              echo "::warning::Models API response has no .data array"
             fi
           else
             echo "::warning::Models API returned HTTP ${HTTP_CODE}"
           fi
 
           if [ -z "$BEST_MODEL" ]; then
-            echo "::warning::Could not determine best model, falling back to claude-sonnet-4-20250514"
-            BEST_MODEL="claude-sonnet-4-20250514"
+            echo "::warning::Could not determine best model, falling back to anthropic/claude-sonnet-4"
+            BEST_MODEL="anthropic/claude-sonnet-4"
           fi
 
           echo "Selected model: ${BEST_MODEL}"
@@ -307,6 +312,7 @@ jobs:
           echo "Security rules context: ${RULES_SIZE} bytes"
 
           # Combine: system prompt + security rules + onchainos context + plugin content
+          # Use OpenRouter format (OpenAI-compatible)
           MODEL="${{ steps.model.outputs.model }}"
           echo "Using model: ${MODEL}"
 
@@ -350,31 +356,39 @@ jobs:
           SIZE=$(wc -c < /tmp/api_request.json)
           echo "Total API request: ${SIZE} bytes"
 
-      # ── Step 4: Call Claude API ─────────────────────────────────
-      - name: Call Claude API
+      # ── Step 5: Call Claude via OpenRouter API ─────────────────
+      - name: Call Claude API (via OpenRouter)
         id: ai_review
         if: steps.build.outputs.skip != 'true'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           HTTP_CODE=$(curl -s -o /tmp/api_response.json -w "%{http_code}" \
-            https://api.anthropic.com/v1/messages \
-            -H "content-type: application/json" \
-            -H "x-api-key: ${ANTHROPIC_API_KEY}" \
-            -H "anthropic-version: 2023-06-01" \
+            https://openrouter.ai/api/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${OPENROUTER_API_KEY}" \
             -d @/tmp/api_request.json)
 
           echo "HTTP status: ${HTTP_CODE}"
 
           if [ "$HTTP_CODE" != "200" ]; then
-            echo "AI review unavailable (API error HTTP ${HTTP_CODE}). Human review required without AI assistance." > /tmp/ai_review.md
-            cat /tmp/api_response.json >> /tmp/ai_review.md
+            ERROR_MSG=$(jq -r '.error.message // "Unknown error"' /tmp/api_response.json 2>/dev/null || echo "HTTP ${HTTP_CODE}")
+            echo "AI review unavailable (${ERROR_MSG}). Human review required without AI assistance." > /tmp/ai_review.md
             echo "score=N/A" >> "$GITHUB_OUTPUT"
             echo "merge_rec=manual" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          jq -r '.content[0].text // "ERROR: No text in response"' /tmp/api_response.json > /tmp/ai_review.md
+          # OpenRouter uses OpenAI-compatible response format
+          jq -r '.choices[0].message.content // "ERROR: No text in response"' /tmp/api_response.json > /tmp/ai_review.md
+
+          # Extract model actually used and cost
+          ACTUAL_MODEL=$(jq -r '.model // "unknown"' /tmp/api_response.json)
+          COST=$(jq -r '.usage.cost // "unknown"' /tmp/api_response.json)
+          echo "Model used: ${ACTUAL_MODEL}, Cost: \$${COST}"
+          echo "actual_model=${ACTUAL_MODEL}" >> "$GITHUB_OUTPUT"
+          echo "cost=${COST}" >> "$GITHUB_OUTPUT"
+
           REVIEW=$(cat /tmp/ai_review.md)
 
           SCORE=$(echo "$REVIEW" | grep -oP 'Quality Score:\s*\K\d+' | head -1 || echo "N/A")
@@ -388,7 +402,7 @@ jobs:
             echo "merge_rec=caveats" >> "$GITHUB_OUTPUT"
           fi
 
-      # ── Step 5: Post report to PR ──────────────────────────────
+      # ── Step 6: Post report to PR ──────────────────────────────
       - name: Post review report
         if: always() && steps.build.outputs.skip != 'true'
         uses: actions/github-script@v7
@@ -406,6 +420,8 @@ jobs:
             const score = '${{ steps.ai_review.outputs.score }}' || 'N/A';
             const mergeRec = '${{ steps.ai_review.outputs.merge_rec }}' || 'manual';
             const hasOnchainos = '${{ steps.onchainos.outputs.available }}' === 'true';
+            const actualModel = '${{ steps.ai_review.outputs.actual_model }}' || 'unknown';
+            const cost = '${{ steps.ai_review.outputs.cost }}' || 'unknown';
 
             let recIcon, recText;
             if (mergeRec === 'ready') {
@@ -418,10 +434,9 @@ jobs:
               recIcon = '👤'; recText = 'Manual review required';
             }
 
-            const modelUsed = '${{ steps.model.outputs.model }}' || 'unknown';
             const contextNote = hasOnchainos
-              ? `🔗 Reviewed against **latest onchainos source code** (live from main branch) | Model: \`${modelUsed}\``
-              : `⚠️ onchainos source was unavailable — review based on AI knowledge only | Model: \`${modelUsed}\``;
+              ? `🔗 Reviewed against **latest onchainos source code** (live from main branch) | Model: \`${actualModel}\` | Cost: $${cost}`
+              : `⚠️ onchainos source was unavailable — review based on AI knowledge only | Model: \`${actualModel}\``;
 
             // Split into collapsible sections
             const sections = review.split(/(?=^## \d+\.)/m).filter(s => s.trim());
@@ -452,7 +467,7 @@ jobs:
               reportBody,
               '---',
               '',
-              '*Generated by Claude AI — review the full report before approving.*'
+              '*Generated by Claude AI via OpenRouter — review the full report before approving.*'
             ].join('\n');
 
             const { data: comments } = await github.rest.issues.listComments({
